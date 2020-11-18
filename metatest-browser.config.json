@@ -1,0 +1,8 @@
+{
+  "files": ["browser-test/vm.js"],
+  "exclude": [],
+  "browser": {
+    "browsers": ["ChromeHeadless"],
+    "logLevel": "default"
+  }
+}

@@ -36,6 +36,7 @@
   "scripts": {
     "lint": "eslint . && prettier --check \"**/*.js\" \"**/*.json\" \"**/*.md\" \"**/.*rc\" \"**/*.yml\"",
     "fmt": "prettier --write \"**/*.js\" \"**/*.json\" \"**/*.md\" \"**/.*rc\" \"**/*.yml\"",
+    "metatests-browser": "metatests-browser -c metatest-browser.config.json",
     "types": "tsc -p types/tsconfig.json",
     "test": "eslint . && metatests test/"
   },
@@ -46,6 +47,7 @@
     "eslint-plugin-import": "^2.22.1",
     "eslint-plugin-prettier": "^3.1.4",
     "metatests": "^0.7.2",
+    "metatests-browser-runner": "^0.6.0",
     "prettier": "^2.1.2",
     "typescript": "^4.0.2"
   }
