@@ -1,7 +1,7 @@
 'use strict';
 
 const mt = require('metatests');
-const vm = require('../lib/browser-vm/vm');
+const vm = require('../lib/browser-vm/vm.js');
 
 mt.test('use not contextified object', (test) => {
   const msg =
