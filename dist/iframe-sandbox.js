@@ -1,5 +1,3 @@
-'use strict';
-
 const prepareWindow = (window) => {
   window.setTimeout = undefined;
   window.setInterval = undefined;
@@ -47,4 +45,4 @@ const runScriptInIframe = (documentToAddIframe, context, code) => {
   return result;
 };
 
-module.exports = { runScriptInIframe };
+export { runScriptInIframe };

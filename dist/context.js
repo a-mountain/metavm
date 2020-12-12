@@ -1,5 +1,3 @@
-'use strict';
-
 const contextOptionsSymbol = Symbol('contextOptionsSymbol');
 
 /**
@@ -35,4 +33,4 @@ const getContextOptions = (context) => {
   }
 };
 
-module.exports = { createContext, isContext, getContextOptions };
+export { createContext, isContext, getContextOptions };

@@ -1,7 +1,5 @@
-'use strict';
-
-const { runScriptInIframe } = require('./iframe-sandbox.js');
-const { createContext, isContext } = require('./context.js');
+import { runScriptInIframe } from './iframe-sandbox.js';
+import { createContext, isContext } from './context.js';
 
 /**
  * options -  is not supported
@@ -62,11 +60,11 @@ const runInThisContext = (code, options) => {
   return script.runInThisContext();
 };
 
-module.exports = {
+export {
   Script,
   runInContext,
   runInNewContext,
   runInThisContext,
   createContext,
-  isContext,
+  isContext
 };
