@@ -16,7 +16,8 @@
   ],
   "main": "metavm.js",
   "browser": {
-    "./metavm.js": "./dist/metavm.js"
+    "./metavm.js": "./dist/metavm.js",
+    "./vm.js": "./dist/vm.js"
   },
   "files": [
     "dist/",
