@@ -62,9 +62,9 @@ mt.test('add new property', (test) => {
   test.strictSame(context.a, 1);
   test.end();
 });
-mt.test('add property with key included in document by default', (test) => {
+
+mt.test('add default window property "name"', (test) => {
   const context = vm.createContext({ name: {} });
-  // window.name
   vm.runInContext('name = "hello"', context);
   test.strictSame(context.name, 'hello');
   test.end();
