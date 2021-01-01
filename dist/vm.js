@@ -1,5 +1,30 @@
 import { runScriptInIframe } from './iframe-sandbox.js';
-import { createContext, isContext } from './context.js';
+
+const contextOptionsSymbol = Symbol('contextOptionsSymbol');
+
+const createContext = (contextObject, options = {}) => {
+  const context = {};
+  Object.assign(context, contextObject);
+  Object.freeze(options);
+  Object.defineProperty(context, contextOptionsSymbol, {
+    value: options,
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  });
+  if (Object.isFrozen(contextObject)) {
+    Object.freeze(context);
+  }
+  if (Object.isSealed(contextObject)) {
+    Object.seal(context);
+  }
+  if (!Object.isExtensible(contextObject)) {
+    Object.preventExtensions(context);
+  }
+  return context;
+};
+
+const isContext = (context) => context[contextOptionsSymbol] !== undefined;
 
 /**
  * options -  is not supported
