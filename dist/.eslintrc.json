@@ -1,6 +1,7 @@
 {
   "env": {
-    "node": false
+    "node": false,
+    "browser": true
   },
   "parserOptions": {
     "sourceType": "module"
