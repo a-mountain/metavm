@@ -7,7 +7,7 @@ const removeRedundantOptions = (template, options) => {
 };
 
 /**
- *  Remove redundant options and add defaults options.
+ *  Remove redundant options and add defaults for missing options.
  */
 const normalizeOptions = (options, defaultOptions) => {
   removeRedundantOptions(defaultOptions, options);
