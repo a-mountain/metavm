@@ -3,18 +3,20 @@
 const mt = require('metatests');
 const vm = require('../dist/vm.js');
 
-mt.test('use not contextified object', (test) => {
-  const msg =
-    'The "contextifiedObject" argument must be an vm.Context.' +
-    ` Received an instance of object`;
-  test.throws(() => vm.runInContext('', {}), new TypeError(msg));
-  test.end();
-});
+const strict = (code) => `'use strict';\n` + code;
 
-mt.test('check deleting iframe', (test) => {
+mt.test('check deleting iframe if timeout == 0', (test) => {
   vm.runInNewContext('', {});
   const actual = document.getElementsByTagName('iframe');
   test.strictSame(actual.length, 0);
+  test.end();
+});
+
+mt.test('use not contextified object', (test) => {
+  const msg =
+  'The "contextifiedObject" argument must be an vm.Context.' +
+    ` Received an instance of object`;
+  test.throws(() => vm.runInContext('', {}), new TypeError(msg));
   test.end();
 });
 
@@ -25,7 +27,7 @@ mt.test('run in this context', (test) => {
   test.strictSame(actual, 4);
   test.end();
 });
-
+//
 mt.test('has context property', (test) => {
   const code = 'a';
   const script = new vm.Script(code);
@@ -95,13 +97,143 @@ mt.test('get html element', (test) => {
   const context = vm.createContext({ getElementsByTagName });
 
   const result = vm.runInContext(code, context);
-
   test.strictSame(result.length, 1);
   test.end();
 });
 
-mt.test('promise', (test) => {
-  const code = 'promise.then(v => {test.strictSame(v, 1); test.end();})';
-  const promise = new Promise((resolve) => setTimeout(() => resolve(1), 50));
-  vm.runInNewContext(code, { promise, test });
+mt.test('block eval', (test) => {
+  const context = vm.createContext({}, {
+    codeGeneration: {
+      strings: false
+    }
+  });
+  const msg = 'Code generation from strings disallowed for this context';
+  const withEval = () => {
+    vm.runInContext(strict('eval("1 + 1")'), context);
+  };
+  test.throws(withEval, new EvalError(msg));
+  test.end();
 });
+
+mt.test('run code without eval with eval blocking', (test) => {
+  const context = vm.createContext({}, {
+    codeGeneration: {
+      strings: false
+    }
+  });
+  const actual = vm.runInContext('1 + 1', context);
+  test.strictSame(actual, 2);
+  test.end();
+});
+
+mt.test('options.filename', (test) => {
+  const context = vm.createContext({});
+  const expectedFilename = 'filename';
+  const expectedMessage = 'message';
+  const errors = [
+    'Error',
+    'EvalError',
+    'RangeError',
+    'ReferenceError',
+    'SyntaxError',
+    'TypeError',
+    'URIError'
+  ];
+  for (const error of errors) {
+    const code = `throw new ${error}("${expectedMessage}", "wrongFilename")`;
+    try {
+      vm.runInContext(code, context, expectedFilename);
+    } catch (e) {
+      test.strictSame(e.message, expectedMessage, error);
+      test.strictSame(e.filename, expectedFilename, error);
+    }
+  }
+  test.end();
+});
+
+mt.test('options.name', (test) => {
+  const expectedName = 'name';
+  vm.runInNewContext('', {}, {
+    timeout: 5,
+    contextName: expectedName
+  });
+  test.strictSame(document.getElementsByName(expectedName).length, 1);
+  test.end();
+});
+
+mt.test('block code generation with Function constructor', (test) => {
+  const context = vm.createContext({}, {
+    codeGeneration: {
+      strings: false
+    }
+  });
+  const msg = 'Code generation from strings disallowed for this context';
+  const withEval = () => {
+    vm.runInContext(strict('new Function("1 + 1")'), context);
+  };
+  test.throws(withEval, new EvalError(msg));
+  test.end();
+});
+
+mt.test('call function with blocking Function constructor', test => {
+  const context = vm.createContext({
+    a: {
+      b: 1
+    }
+  }, {
+    codeGeneration: {
+      strings: false
+    }
+  });
+  const code = 'function f() {return this.b} f.call(a)';
+  const result = vm.runInContext(strict(code), context);
+  test.strictSame(result, 1);
+  test.end();
+});
+
+mt.test('name property with blocking Function constructor', test => {
+  const context = vm.createContext({
+    a: {
+      b: 1
+    }
+  }, {
+    codeGeneration: {
+      strings: false
+    }
+  });
+  const code = 'function f() {return this.b} f.name';
+  const result = vm.runInContext(strict(code), context);
+  test.strictSame(result, 'f');
+  test.end();
+});
+
+/**
+ * Blocking code generation for GeneratorFunction constructor
+ * isn't implemented.
+ */
+//
+// mt.test('block code generation GeneratorFunction', (test) => {
+//   const context = vm.createContext({}, {
+//     codeGeneration: {
+//       strings: false
+//     }
+//   });
+//   const msg = 'Code generation from strings disallowed for this context';
+//   const code = 'Object.getPrototypeOf(function *(a){return a}).constructor';
+//   const withEval = () => {
+//     vm.runInContext(strict(code), context);
+//   };
+//   test.throws(withEval, new EvalError(msg));
+//   test.end();
+// });
+// mt.test('setTimeout', test => {
+//   const context = vm.createContext({ a: { b: 1 }, setTimeout });
+//   const code = 'setTimeout(() => { a.b = 2; }, 100);';
+//   vm.runInContext(strict(code), context);
+//   setTimeout(() => {
+//     test.strictSame(context.a.b, 2);
+//     test.end();
+//   }, 1000);
+// });
+
+
