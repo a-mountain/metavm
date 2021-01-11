@@ -1,7 +1,19 @@
 # VM BROWSER
 
+It's [Node.js vm module](https://nodejs.org/api/vm.html) polyfill for a browser.
 
-## VM (executing JavaScript)
+The vm module enables running code within Iframe Window contexts. The vm module is not a security mechanism.
+Do not use it to run untrusted code.
+
+A common use case is to run the code in a different Window Context. This means invoked code has a different global object
+than the invoking code.
+
+One can provide the context by contextifying an object. The invoked code treats any property in the context
+like a global variable. Any changes to global variables caused by the invoked code are reflected in the context object.
+
+
+Developed by [Maxim Perevalov](https://github.com/a-mountain).
+
 
 ### `vm.isContext(object])`
 
