@@ -40,7 +40,7 @@ mt.test('options.name', (test) => {
 mt.test('check deleting iframe if timeout == 0', (test) => {
   const name = 'deleting iframe';
   vm.runInNewContext('', {
-    contextName: name
+    contextName: name,
   });
   const actual = document.getElementsByName(name);
   test.strictSame(actual.length, 0);
@@ -245,6 +245,23 @@ mt.test('name property with blocking Function constructor', (test) => {
   const result = vm.runInContext(strict(code), context);
   test.strictSame(result, 'f');
   test.end();
+});
+
+mt.test('delete iframe by hand before timeout', (test) => {
+  const name = 'delete iframe';
+  vm.runInNewContext(
+    '',
+    {},
+    {
+      timeout: 5,
+      contextName: name,
+    }
+  );
+  const iframe = document.getElementsByName(name)[0];
+  document.body.removeChild(iframe);
+  setTimeout(() => {
+    test.end();
+  }, 10);
 });
 
 /**

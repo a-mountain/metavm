@@ -10,7 +10,6 @@ const sandboxes = new WeakMap();
 let contextCounter = 0;
 
 const getDefaultContextName = () => `VM Context ${contextCounter++}`;
-const getIframeId = () => `iframe-vm:${Date.now()}`;
 
 const throwNotContextifiedObjectTypeError = (context) => {
   const type = typeof context;
@@ -20,17 +19,10 @@ const throwNotContextifiedObjectTypeError = (context) => {
   throw new TypeError(msg);
 };
 
-const deleteByValue = (array, value) => {
-  const index = array.indexOf(value);
-  if (index > -1) {
-    array.splice(index, 1);
-  }
-};
-
-const createIframeElement = (document, name) => {
+const createIframeElement = (document, name, id) => {
   const element = document.createElement('iframe');
   element.style.display = 'none';
-  element.id = getIframeId();
+  element.id = id;
   element.name = name;
   element.className = IFRAME_CLASS_DEFAULT;
   document.body.appendChild(element);
@@ -61,7 +53,7 @@ const setFilenameForAllErrors = (contentWindow, errorFilename) => {
   }
 };
 
-const funcWithoutCodeGeneration = () =>
+const functionWithoutCodeGeneration = () =>
   class Func extends Function {
     constructor(...args) {
       if (args.length !== 0) {
@@ -72,30 +64,37 @@ const funcWithoutCodeGeneration = () =>
   };
 
 const createIframe = (document, context, options) => {
-  const element = createIframeElement(document, options.name);
+  const id = `iframe-vm:${Date.now()}`;
+  const element = createIframeElement(document, options.name, id);
   const contentWindow = element.contentWindow;
-  Object.assign(contentWindow, context);
-  const defaultContentKeys = Object.keys(contentWindow);
-  const isNotDefaultContentKey = (key) => !defaultContentKeys.includes(key);
+  const defaultWindowKeys = Object.keys(contentWindow);
+  const isNotDefaultWindowKey = (key) => !defaultWindowKeys.includes(key);
+  const isExtensible = Object.isExtensible(context);
+  const isContextKey = (key) => key in context;
+  const canAddNewKey = (key) => isExtensible && isNotDefaultWindowKey(key);
   const runScript = contentWindow.eval;
+  const isAttachedToDocument = () => document.body.contains(element);
   setFilenameForAllErrors(contentWindow, options.filename);
   if (options.blockCodeGeneration) {
     contentWindow.eval = () => {
       throw new EvalError(ERR_EVAL);
     };
-    contentWindow.Function = funcWithoutCodeGeneration();
+    contentWindow.Function = functionWithoutCodeGeneration();
   }
+  Object.assign(contentWindow, context);
   return {
+    id,
     deleteFromDocument() {
-      document.body.removeChild(element);
+      if (isAttachedToDocument()) {
+        document.body.removeChild(element);
+      }
     },
     updateContext() {
-      const isExtensible = Object.isExtensible(context);
-      const isContextKey = (key) => key in context;
-      const canAddNewKey = (key) => isExtensible && isNotDefaultContentKey(key);
-      for (const [key, value] of Object.entries(contentWindow)) {
-        if (isContextKey(key) || canAddNewKey(key)) {
-          context[key] = value;
+      if (isAttachedToDocument()) {
+        for (const [key, value] of Object.entries(contentWindow)) {
+          if (isContextKey(key) || canAddNewKey(key)) {
+            context[key] = value;
+          }
         }
       }
     },
@@ -106,18 +105,19 @@ const createIframe = (document, context, options) => {
 };
 
 const createSandbox = (context, rootWindow, contextOptions) => {
-  const iframes = [];
-  const isFrozen = Object.isFrozen(context);
-  const getIframe = (iframeOptions) => {
+  const iframes = new Map();
+  const isNotFrozen = !Object.isFrozen(context);
+  const addNewIframe = (iframeOptions) => {
     const iframe = createIframe(rootWindow.document, context, iframeOptions);
-    iframes.push(iframe);
+    const id = iframe.id;
+    iframes.set(id, iframe);
     return iframe;
   };
   const deleteIframe = (iframe) => {
-    if (!isFrozen) {
+    if (isNotFrozen) {
       iframe.updateContext();
     }
-    deleteByValue(iframes, iframe);
+    iframes.delete(iframe.id);
     iframe.deleteFromDocument();
   };
   return {
@@ -125,8 +125,10 @@ const createSandbox = (context, rootWindow, contextOptions) => {
       if (iframes.length === 0) {
         return;
       }
-      if (!isFrozen) {
-        iframes.forEach((iframe) => iframe.updateContext());
+      if (isNotFrozen) {
+        for (const iframe of iframes.values()) {
+          iframe.updateContext();
+        }
       }
     },
     runScript(script, runOptions) {
@@ -135,7 +137,7 @@ const createSandbox = (context, rootWindow, contextOptions) => {
         blockCodeGeneration: !contextOptions.codeGeneration.strings,
         filename: runOptions.filename,
       };
-      const iframe = getIframe(iframeOptions);
+      const iframe = addNewIframe(iframeOptions);
       const timeout = runOptions.timeout;
       const deleteIframeImmediately = timeout === 0;
       const runWithTimeout = timeout > 0 && timeout !== Number.MAX_VALUE;
