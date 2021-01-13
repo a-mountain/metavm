@@ -137,13 +137,15 @@ const createSandbox = (context, rootWindow, contextOptions) => {
       };
       const iframe = getIframe(iframeOptions);
       const timeout = runOptions.timeout;
+      const deleteIframeImmediately = timeout === 0;
+      const runWithTimeout = timeout > 0 && timeout !== Number.MAX_VALUE;
       try {
-        if (timeout === 0) {
+        if (deleteIframeImmediately) {
           const result = iframe.runScript(script);
           deleteIframe(iframe);
           return result;
         }
-        if (timeout > 0 && timeout !== Number.MAX_VALUE) {
+        if (runWithTimeout) {
           setTimeout(() => deleteIframe(iframe), timeout);
         }
         return iframe.runScript(script);
