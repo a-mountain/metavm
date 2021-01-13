@@ -1,19 +1,16 @@
 import { normalizeOptions } from './options';
 
-const sandboxes = new WeakMap();
-let contextCounter = 0;
-
 const FILENAME_DEFAULT = 'evalmachine.';
 const IFRAME_CLASS_DEFAULT = 'iframe-vm';
 const TIMEOUT_DEFAULT = 0;
 
+const ERR_EVAL = 'Code generation from strings disallowed for this context';
+
+const sandboxes = new WeakMap();
+let contextCounter = 0;
+
 const getDefaultContextName = () => `VM Context ${contextCounter++}`;
 const getIframeId = () => `iframe-vm:${Date.now()}`;
-
-const throwEvalError = () => {
-  const msg = 'Code generation from strings disallowed for this context';
-  throw new EvalError(msg);
-};
 
 const throwNotContextifiedObjectTypeError = (context) => {
   const type = typeof context;
@@ -50,24 +47,25 @@ const setFilenameForAllErrors = (contentWindow, errorFilename) => {
     TypeError,
     URIError,
   ];
-  errors
-    .map((error) => ({
-      name: error.name,
-      newError: class ErrorWithFilename extends error {
-        constructor(message, filename, lineNumber) {
-          super(message, filename, lineNumber);
-          this.filename = errorFilename;
-        }
-      },
-    }))
-    .forEach((v) => (contentWindow[v.name] = v.newError));
+  const wrappedErrors = errors.map((error) => ({
+    name: error.name,
+    newError: class ErrorWithFilename extends error {
+      constructor(message, filename, lineNumber) {
+        super(message, filename, lineNumber);
+        this.filename = errorFilename;
+      }
+    },
+  }));
+  for (const wrappedError of wrappedErrors) {
+    contentWindow[wrappedError.name] = wrappedError.newError;
+  }
 };
 
 const funcWithoutCodeGeneration = () =>
   class Func extends Function {
     constructor(...args) {
       if (args.length !== 0) {
-        throwEvalError();
+        throw new EvalError(ERR_EVAL);
       }
       super();
     }
@@ -78,11 +76,13 @@ const createIframe = (document, context, options) => {
   const contentWindow = element.contentWindow;
   Object.assign(contentWindow, context);
   const defaultContentKeys = Object.keys(contentWindow);
-  const isNotDefaultContentKey = key => !defaultContentKeys.includes(key);
+  const isNotDefaultContentKey = (key) => !defaultContentKeys.includes(key);
   const runScript = contentWindow.eval;
   setFilenameForAllErrors(contentWindow, options.filename);
   if (options.blockCodeGeneration) {
-    contentWindow.eval = throwEvalError;
+    contentWindow.eval = () => {
+      throw new EvalError(ERR_EVAL);
+    };
     contentWindow.Function = funcWithoutCodeGeneration();
   }
   return {
@@ -91,8 +91,8 @@ const createIframe = (document, context, options) => {
     },
     updateContext() {
       const isExtensible = Object.isExtensible(context);
-      const isContextKey = key => key in context;
-      const canAddNewKey = key => isExtensible && isNotDefaultContentKey(key);
+      const isContextKey = (key) => key in context;
+      const canAddNewKey = (key) => isExtensible && isNotDefaultContentKey(key);
       for (const [key, value] of Object.entries(contentWindow)) {
         if (isContextKey(key) || canAddNewKey(key)) {
           context[key] = value;
@@ -108,12 +108,12 @@ const createIframe = (document, context, options) => {
 const createSandbox = (context, rootWindow, contextOptions) => {
   const iframes = [];
   const isFrozen = Object.isFrozen(context);
-  const getIframe = iframeOptions => {
+  const getIframe = (iframeOptions) => {
     const iframe = createIframe(rootWindow.document, context, iframeOptions);
     iframes.push(iframe);
     return iframe;
   };
-  const deleteIframe = iframe => {
+  const deleteIframe = (iframe) => {
     if (!isFrozen) {
       iframe.updateContext();
     }
@@ -126,7 +126,7 @@ const createSandbox = (context, rootWindow, contextOptions) => {
         return;
       }
       if (!isFrozen) {
-        iframes.forEach(iframe => iframe.updateContext());
+        iframes.forEach((iframe) => iframe.updateContext());
       }
     },
     runScript(script, runOptions) {
@@ -202,9 +202,12 @@ const createContextProxy = (sandbox, context) => {
   });
 };
 
-const makeOptionsFromFilename = (filename) => ({ filename });
+const getFilename = (filename) => ({ filename });
 
 const isFilename = (options) => typeof options === 'string';
+
+const getOptionsOrFilename = (opt) =>
+  isFilename(opt) ? getFilename(opt) : opt;
 
 const createContext = (contextObject, options = {}) => {
   normalizeOptions(options, {
@@ -226,22 +229,18 @@ const runInContext = (code, context, options = {}) => {
   if (!isContext(context)) {
     throwNotContextifiedObjectTypeError(context);
   }
-  if (isFilename(options)) {
-    options = makeOptionsFromFilename(options);
-  }
-  normalizeOptions(options, {
+  const validOptions = getOptionsOrFilename(options);
+  normalizeOptions(validOptions, {
     timeout: TIMEOUT_DEFAULT,
     filename: FILENAME_DEFAULT,
   });
   const sandbox = sandboxes.get(context);
-  return sandbox.runScript(code, options);
+  return sandbox.runScript(code, validOptions);
 };
 
 const runInNewContext = (code, contextObject = {}, options = {}) => {
-  if (isFilename(options)) {
-    options = makeOptionsFromFilename(options);
-  }
-  normalizeOptions(options, {
+  const validOptions = getOptionsOrFilename(options);
+  normalizeOptions(validOptions, {
     timeout: TIMEOUT_DEFAULT,
     filename: FILENAME_DEFAULT,
     contextCodeGeneration: {
@@ -254,7 +253,7 @@ const runInNewContext = (code, contextObject = {}, options = {}) => {
     codeGeneration: options.contextCodeGeneration,
   };
   const context = createContext(contextObject, contextOptions);
-  return runInContext(code, context, options);
+  return runInContext(code, context, validOptions);
 };
 
 const runInThisContext = (code) => eval(code);
@@ -262,23 +261,21 @@ const runInThisContext = (code) => eval(code);
 class Script {
   constructor(code, options = {}) {
     this.code = code;
-    if (isFilename(options)) {
-      options = makeOptionsFromFilename(options);
-    }
-    normalizeOptions(options, {
+    const validOptions = getOptionsOrFilename(options);
+    normalizeOptions(validOptions, {
       filename: FILENAME_DEFAULT,
     });
-    this.options = options;
+    this.options = validOptions;
   }
 
   runInContext(contextifiedObject, options = {}) {
-    options.filename = this.options.filename;
-    return runInContext(this.code, contextifiedObject, options);
+    const validOptions = getOptionsOrFilename(options);
+    return runInContext(this.code, contextifiedObject, validOptions);
   }
 
   runInNewContext(contextObject, options = {}) {
-    options.filename = this.options.filename;
-    return runInNewContext(this.code, contextObject, options);
+    const validOptions = getOptionsOrFilename(options);
+    return runInNewContext(this.code, contextObject, validOptions);
   }
 
   runInThisContext() {
